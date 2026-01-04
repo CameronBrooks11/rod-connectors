@@ -1,11 +1,20 @@
 $fn = $preview ? 32 : 128;
 z_fight = $preview ? 0.05 : 0;
 
-rod_diameter = 25.4;
-connector_wall_thickness = 5;
-inner_fn = $fn;
-outer_fn = 8;
+rod_diameter = 25.4 + 0.2; // 1 inch plus tolerance
+connector_wall_thickness = 5; // thickness of connector walls
+inner_fn = $fn; // smooth inner clearance
+outer_fn = 8; // faceted outer shell
 
+connector_vectors = [
+  [50, 0, -40],
+  [0, 50, -40],
+  [-50, 0, -40],
+  [0, -50, -40],
+  [0, 0, 50],
+];
+
+/* 
 connector_vectors = [
   [50, 10, 0],
   [-10, 50, 0],
@@ -17,7 +26,8 @@ connector_vectors = [
   [50, 0, -50],
   [-50, 0, 50],
   [-50, 0, -50],
-];
+]; 
+*/
 
 module orient_to_vector(v) {
   d = v / norm(v);
