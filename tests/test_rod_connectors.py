@@ -8,10 +8,14 @@ usage: python3 tests/test_rod_connectors.py [OPENSCAD]
   and 1 mm further hits the core: the socket has a floor.
 - No two rods at full depth touch each other, and every two bores keep the
   thinner rod's wall between them.
+- dir_spherical, dir_euler and dir_quat give the directions they describe:
+  dir_euler matches where OpenSCAD's own rotate() takes +Z, and the other two
+  match the maths, and each other where they describe the same rotation.
 - rod() and rod_connector() refuse bad input with their messages.
 """
 
 import json
+import math
 import os
 import struct
 import subprocess
@@ -56,6 +60,7 @@ def empty(result):
 
 
 def echoes(result):
+    """ECHO values. OpenSCAD prints about 6 significant digits, so compare them to 1e-5."""
     return [json.loads(l.split("ECHO: ", 1)[1]) for l in result.stderr.splitlines()
             if l.startswith("ECHO: ")]
 
@@ -105,7 +110,7 @@ def main():
         src = "".join(f"d = {d} / norm({d}); echo([rod_matrix(d) * [0,0,1,0], d]);\n" for d in dirs)
         worst = max(max(abs(a - b) for a, b in zip(got[:3], want))
                     for got, want in echoes(run(openscad, src, csg, tmp)))
-        check("rod_matrix turns +Z onto each direction", worst < 1e-9, f"largest error {worst:.1e}")
+        check("rod_matrix turns +Z onto each direction", worst < 1e-5, f"largest error {worst:.1e}")
         # And it is a pure rotation, so sockets keep their shape: orthonormal, determinant 1.
         src = "".join(f"d = {d} / norm({d}); m = rod_matrix(d); r = [for (i = [0:2]) [for (j = [0:2]) m[i][j]]];"
                       " echo([r * transpose(r), r[0] * cross(r[1], r[2])]);\n" for d in dirs)
@@ -113,7 +118,53 @@ def main():
         for rrt, det in echoes(run(openscad, src, csg, tmp)):
             worst = max([worst, abs(det - 1)] + [abs(rrt[i][j] - (1 if i == j else 0))
                                                  for i in range(3) for j in range(3)])
-        check("rod_matrix is a rotation", worst < 1e-9, f"largest error {worst:.1e}")
+        check("rod_matrix is a rotation", worst < 1e-5, f"largest error {worst:.1e}")
+
+        # Directions from other descriptions.
+        angles = [(0, 0, 0), (90, 0, 0), (0, 90, 0), (30, -45, 120), (-60, 20, -75), (180, 10, 45)]
+        worst = 0
+        for roll, pitch, yaw in angles:
+            # Where OpenSCAD's rotate() puts a point 10 mm up +Z: a small sphere's centre.
+            r = run(openscad, f"echo(dir_euler({roll}, {pitch}, {yaw}));\n"
+                    f"rotate([{roll}, {pitch}, {yaw}]) translate([0, 0, 10]) sphere(0.5, $fn = 8);\n",
+                    stl, tmp)
+            (got,) = echoes(r)
+            data = open(stl, "rb").read()
+            (n,) = struct.unpack_from("<I", data, 80)
+            pts = [struct.unpack_from("<3f", data, 84 + i * 50 + 12 + k * 12) for i in range(n) for k in range(3)]
+            centre = [(max(p[a] for p in pts) + min(p[a] for p in pts)) / 2 / 10 for a in range(3)]
+            worst = max([worst] + [abs(g - c) for g, c in zip(got, centre)])
+        check("dir_euler matches OpenSCAD's rotate()", worst < 1e-3, f"largest difference {worst:.1e}")
+
+        cases = [(theta, phi) for theta in (0, 30, 90, 135, 180) for phi in (0, 45, -120)]
+        src = "".join(f"echo(dir_spherical({th}, {ph}));\n" for th, ph in cases)
+        worst = max(max(abs(g - w) for g, w in zip(got, [math.sin(math.radians(th)) * math.cos(math.radians(ph)),
+                                                          math.sin(math.radians(th)) * math.sin(math.radians(ph)),
+                                                          math.cos(math.radians(th))]))
+                    for got, (th, ph) in zip(echoes(run(openscad, src, csg, tmp)), cases))
+        check("dir_spherical gives the direction at (theta, phi)", worst < 1e-5, f"largest error {worst:.1e}")
+
+        # A quaternion for a turn of t degrees about an axis, against the same turn as a rotation matrix
+        # (Rodrigues' formula), and unnormalised quaternions against normalised ones.
+        def rodrigues(axis, t):
+            k = [a / math.sqrt(sum(b * b for b in axis)) for a in axis]
+            c, s = math.cos(math.radians(t)), math.sin(math.radians(t))
+            z = [0, 0, 1]
+            kxz = [k[1] * z[2] - k[2] * z[1], k[2] * z[0] - k[0] * z[2], k[0] * z[1] - k[1] * z[0]]
+            kdz = sum(a * b for a, b in zip(k, z))
+            return [z[i] * c + kxz[i] * s + k[i] * kdz * (1 - c) for i in range(3)]
+        turns = [([1, 0, 0], 90), ([0, 1, 0], 90), ([1, 1, 0], 60), ([1, -2, 3], 140), ([0, 0, 1], 75)]
+        src = ""
+        for axis, t in turns:
+            n = math.sqrt(sum(a * a for a in axis))
+            h = math.radians(t) / 2
+            q = [math.cos(h)] + [math.sin(h) * a / n for a in axis]
+            src += f"echo(dir_quat({q}));\necho(dir_quat({[3 * v for v in q]}));\n"
+        got = echoes(run(openscad, src, csg, tmp))
+        worst = max(max(abs(g - w) for g, w in zip(got[2 * k + m], rodrigues(axis, t)))
+                    for k, (axis, t) in enumerate(turns) for m in (0, 1))
+        check("dir_quat turns +Z as the quaternion's rotation does, at any scale", worst < 1e-5,
+              f"largest error {worst:.1e}")
 
         # Sockets: each rod fits fully home, and has a floor.
         for label, rods in CONNECTORS.items():
@@ -172,6 +223,7 @@ def main():
             ("refuses two rods pointing the same way",
              "rod_connector([rod([0, 0, 1]), rod([0, 0, 2])]);", "point the same way"),
             ("refuses something that isn't a rod", "rod_connector([[0, 0, 1]]);", "is not a rod()"),
+            ("refuses a zero quaternion", "echo(dir_quat([0, 0, 0, 0]));", "q must be a non-zero"),
         ]:
             r = run(openscad, source_text + "\n", stl, tmp)
             errors = [l for l in r.stderr.splitlines() if "ERROR" in l]
