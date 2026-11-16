@@ -40,6 +40,20 @@ socket.
 Each rod can differ from the others: a hub can take a 1-inch post and a
 10 mm stay.
 
+### Directions
+
+`dir` is a vector, and three functions give one from other descriptions
+(angles in degrees):
+
+| Function | Direction |
+|---|---|
+| `dir_spherical(theta, phi)` | `theta` down from +Z, `phi` around from +X |
+| `dir_euler(roll, pitch, yaw)` | Where OpenSCAD's `rotate([roll, pitch, yaw])` takes +Z |
+| `dir_quat([w, x, y, z])` | Where the quaternion's rotation takes +Z; it needn't be unit length |
+
+A spherical `[length, theta, phi]` description's length is the rod's depth:
+`rod(dir_spherical(theta, phi), depth=length)`.
+
 ## How deep the sockets start
 
 A socket's bore starts some way out from the centre, so rods don't meet in
@@ -62,6 +76,7 @@ checking a design.
 | [`examples/hub_five_way.scad`](examples/hub_five_way.scad) | Five 1-inch rods: four legs splayed down, one post up |
 | [`examples/corner_three_way.scad`](examples/corner_three_way.scad) | A cube-frame corner for three 3/4-inch rods |
 | [`examples/mixed_rods.scad`](examples/mixed_rods.scad) | Three rod sizes, with a set-screw hole and a clamping slot |
+| [`examples/tripod_spherical.scad`](examples/tripod_spherical.scad) | A tripod head, its legs placed with `dir_spherical` |
 
 ## Tests
 
@@ -69,7 +84,8 @@ checking a design.
 every example and probes several hubs with OpenSCAD. It checks that each part
 is one solid, that a rod fits fully home and is stopped 1 mm further by its
 socket's floor, that no two rods touch and a wall stands between every two
-bores, that the screw hole and slot go through the wall, and that bad input
+bores, that the screw hole and slot go through the wall, that the direction
+functions agree with OpenSCAD's `rotate()` and the maths, and that bad input
 is refused. `just images` renders the picture above.
 
 ## Licence

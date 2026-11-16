@@ -54,6 +54,32 @@ function rod_clearance(r) = r[5];
 function rod_bore_radius(r) = (r[2] + r[5]) / 2;
 function rod_outer_radius(r) = rod_bore_radius(r) + r[4];
 
+// ---- Directions ------------------------------------------------------------------
+//
+// rod() takes a direction vector. These give one from other descriptions;
+// angles are in degrees.
+
+// Spherical: theta is the angle down from +Z, phi the angle around from +X.
+// A [length, theta, phi] description's length is the rod's depth, not part of
+// its direction: rod(dir_spherical(theta, phi), depth = length).
+function dir_spherical(theta, phi) =
+  [sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta)];
+
+// Euler angles, as OpenSCAD's rotate([roll, pitch, yaw]) applies them: about
+// X, then Y, then Z. The result is where that rotation takes +Z.
+function dir_euler(roll, pitch, yaw) =
+  let(cr = cos(roll), sr = sin(roll), cp = cos(pitch), sp = sin(pitch),
+      cy = cos(yaw), sy = sin(yaw))
+  [cy * sp * cr + sy * sr, sy * sp * cr - cy * sr, cp * cr];
+
+// A quaternion [w, x, y, z]; it needn't be unit length. The result is where
+// its rotation takes +Z.
+function dir_quat(q) =
+  assert(is_list(q) && len(q) == 4 && norm(q) > 0,
+         str("dir_quat: q must be a non-zero [w, x, y, z], got ", q))
+  let(n = q / norm(q), w = n[0], x = n[1], y = n[2], z = n[3])
+  [2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y)];
+
 // ---- Geometry helpers ------------------------------------------------------------
 
 // The transform that turns the socket's own axis, +Z, onto the unit vector d:
