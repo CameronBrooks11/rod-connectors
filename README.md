@@ -86,7 +86,9 @@ is one solid, that a rod fits fully home and is stopped 1 mm further by its
 socket's floor, that no two rods touch and a wall stands between every two
 bores, that the screw hole and slot go through the wall, that the direction
 functions agree with OpenSCAD's `rotate()` and the maths, and that bad input
-is refused. `just images` renders the picture above.
+is refused. `just images` renders the picture above. `just fmt` formats the
+`.scad` files with topiary 0.8.0, and `just check` fails if one is not
+formatted.
 
 ## Licence
 
