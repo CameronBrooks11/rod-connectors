@@ -6,10 +6,12 @@ $fn = $preview ? 32 : 96;
 
 leg = function(x, y) rod([x, y, -0.8]);
 
-rod_connector([
-  leg(1, 0),
-  leg(0, 1),
-  leg(-1, 0),
-  leg(0, -1),
-  rod([0, 0, 1]),
-]);
+rod_connector(
+    [
+        leg(1, 0),
+        leg(0, 1),
+        leg(-1, 0),
+        leg(0, -1),
+        rod([0, 0, 1]),
+    ]
+);
